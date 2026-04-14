@@ -14,7 +14,10 @@
 ## 🚀 Установка
 
 1. Скачайте скрипт `autoload_in_context_menu(ADMIN)_v4.0.py`
-2. Запустите **от имени администратора**:
+2. Установите зависимость:
+   ```cmd
+   pip install pywin32
+3. Запустите **от имени администратора**:
    ```cmd
    python autoload_in_context_menu(ADMIN)_v5.0.py
 
