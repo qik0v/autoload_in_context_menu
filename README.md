@@ -16,7 +16,7 @@
 1. Скачайте скрипт `autoload_in_context_menu(ADMIN)_v4.0.py`
 2. Запустите **от имени администратора**:
    ```cmd
-   python autoload_in_context_menu(ADMIN)_v4.0.py
+   python autoload_in_context_menu(ADMIN)_v5.0.py
 
 Следуйте инструкциям на экране
 
@@ -33,7 +33,7 @@
 
 ## 📦 Технические детали
 
-- **Версия**: 4.0
+- **Версия**: 5.0
 - **Расположение автозагрузки**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
 - **Тип**: Контекстное меню для всех файлов (*)
 - **Требования**: Python 3.x, права администратора для установки
