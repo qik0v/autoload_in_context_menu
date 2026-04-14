@@ -1,5 +1,4 @@
-import os
-import sys
+import os, sys, hashlib
 import winreg
 import pythoncom
 from win32com.client import Dispatch
@@ -8,7 +7,7 @@ import tempfile
 import shutil
 import base64
 
-VERSION = "4.0"
+VERSION = "5.0"
 REGISTRY_KEY = r"*\shell\AutostartManager"
 REGISTRY_VERSION_KEY = r"Software\AutostartManager"
 
@@ -67,50 +66,65 @@ def remove_context_menu():
 def add_to_context_menu():
     try:
         python_code = '''
-import os, sys, tempfile, shutil, base64
+import os, sys, hashlib
+import pythoncom
 from win32com.client import Dispatch
 
+def get_startup_path():
+    return os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+
+def get_shortcut_path(file_path):
+    startup_path = get_startup_path()
+    file_name = os.path.splitext(os.path.basename(file_path))[0]
+    # Создаем уникальный хэш на основе полного пути файла
+    path_hash = hashlib.md5(os.path.abspath(file_path).lower().encode('utf-8')).hexdigest()[:6]
+    # Имя ярлыка теперь выглядит как: имяфайла_a1b2c3.lnk
+    shortcut_name = f"{file_name}_{path_hash}.lnk"
+    return os.path.join(startup_path, shortcut_name)
+
 def create_shortcut(target_path, shortcut_path):
+    pythoncom.CoInitialize() # Обязательно для COM-объектов в контекстном меню
     shell = Dispatch('WScript.Shell')
     shortcut = shell.CreateShortCut(shortcut_path)
     shortcut.Targetpath = target_path
     shortcut.WorkingDirectory = os.path.dirname(target_path)
     shortcut.save()
 
-def get_startup_path():
-    return os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+def clean_dead_shortcuts():
+    # Удаляет сломанные ярлыки (если ты удалил или переместил саму программу)
+    startup_path = get_startup_path()
+    if not os.path.exists(startup_path): return
+    
+    pythoncom.CoInitialize()
+    shell = Dispatch('WScript.Shell')
+    for file in os.listdir(startup_path):
+        if file.endswith(".lnk"):
+            lnk_path = os.path.join(startup_path, file)
+            try:
+                shortcut = shell.CreateShortCut(lnk_path)
+                target = shortcut.Targetpath
+                # Если программа, на которую ссылается ярлык, больше не существует - удаляем ярлык
+                if target and not os.path.exists(target):
+                    os.remove(lnk_path)
+            except:
+                pass
 
 def is_in_autostart(file_path):
-    startup_path = get_startup_path()
-    if not os.path.exists(startup_path):
-        return False
-    
-    file_name = os.path.splitext(os.path.basename(file_path))[0]
-    shortcut_name = file_name + ".lnk"
-    shortcut_path = os.path.join(startup_path, shortcut_name)
-    return os.path.exists(shortcut_path)
+    return os.path.exists(get_shortcut_path(file_path))
 
 def add_to_autostart(file_path):
     try:
         startup_path = get_startup_path()
         if not os.path.exists(startup_path):
             os.makedirs(startup_path)
-        
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
-        shortcut_name = file_name + ".lnk"
-        shortcut_path = os.path.join(startup_path, shortcut_name)
-        create_shortcut(file_path, shortcut_path)
+        create_shortcut(file_path, get_shortcut_path(file_path))
         return True
     except:
         return False
 
 def remove_from_autostart(file_path):
     try:
-        startup_path = get_startup_path()
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
-        shortcut_name = file_name + ".lnk"
-        shortcut_path = os.path.join(startup_path, shortcut_name)
-        
+        shortcut_path = get_shortcut_path(file_path)
         if os.path.exists(shortcut_path):
             os.remove(shortcut_path)
             return True
@@ -119,6 +133,8 @@ def remove_from_autostart(file_path):
         return False
 
 if __name__ == "__main__":
+    clean_dead_shortcuts() # Чистим мусор перед работой
+    
     if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
         file_path = sys.argv[1]
         
@@ -133,7 +149,10 @@ if __name__ == "__main__":
             else:
                 print("Отменено")
         else:
-            add_to_autostart(file_path)
+            if add_to_autostart(file_path):
+                print(f"✓ '{os.path.basename(file_path)}' добавлен в автозагрузку!")
+            else:
+                print("✗ Ошибка добавления")
 '''
 
         encoded_code = base64.b64encode(python_code.encode('utf-8')).decode('utf-8')
